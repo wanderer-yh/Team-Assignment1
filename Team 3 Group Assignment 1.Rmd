@@ -1,0 +1,170 @@
+---
+title: "Group Assignment 1--HA Team 3"
+author: "Jennifer Dunham, Christopher Eckstein, Vitasta Shah, Yuhan Wang"
+date: "10/10/2022"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse) # Don't forget to run "install.packages('tidyverse')"
+library(readxl) # For loading excel documents
+library(ggplot2)# For data visualization
+```
+
+# World Happiness
+The World Happiness Report is a landmark survey of the state of global happiness that ranks 156 countries by how happy their citizens perceive themselves to be. 
+
+More Information: https://worldhappiness.report/ed/2022/
+
+Central to this survey is the "Life Evaluation" question. Life evaluation was measured by the individual answers to the Cantril ladder question: “Please imagine a ladder, with steps numbered from 0 at the bottom to 10 at the top. The top of the ladder represents the best possible life for you and the bottom of the ladder represents the worst possible life for you. On which step of the ladder would you say you personally feel you stand at this time?”
+
+
+## Reading the Data
+1) Read in all the data provided to create a single data frame with Happiness metrics for the years from 2005 - 2021. Describe any changes you had to make to combine these datasets effectively.
+
+```{r}
+#Created new uniform data frame column names
+new_names <- c('Country', 'year', 'life_ladder', 'log_gdp_percapita', 'social_support', 'life_expectancy', 'freedom_of_choice', 'generosity', 'perceptions_of_corruption', 'positive_affect', 'negative_affect', 'confidence_in_govt')
+
+# Read in data from excel sheets with a for loop  
+# add new matching column names
+for (i in 2019:2021) {
+  assign(paste0("year", i),
+         read_xlsx("Happiness_2019-2021.xlsx",
+                   sheet = paste0(i),
+                   col_names = new_names, skip = 1))}
+
+df0518 <- read.csv("Happiness_2005-2018.csv")
+colnames(df0518) <- new_names
+
+#Combine all data frames into one
+Happiness_2005_2021 <- bind_rows(df0518, year2019, year2020, year2021)
+```
+
+## Initial Questions
+1) **Do Canada and the United States have common happy/unhappy years?** Filter the combined dataset to view Happiness and associated variables for the United States and Canada over all available years. Find the 3 happiest and unhappiest years for each country in the data provided. Do they seem to align with one another? Are there any key features that differ over the years you selected?
+
+```{r}
+# Create filtered data frame
+us_can <- Happiness_2005_2021 |>  
+  filter(Country == "Canada" | Country == "United States")
+
+
+# US vs. Canada Happiness graph
+ggplot(data = us_can,
+       mapping = aes (x = year,
+                      y = life_ladder,
+                      colour=Country))+
+  geom_point()+
+  geom_smooth()+
+  labs(title = "Happiness by Year for Canada and US", x = "Year", y = "Life Ladder")
+
+# Highest and lowest Canadian years
+canada <- us_can |>  
+  select(Country, year, life_ladder) |>
+  filter(Country == "Canada") |>  
+  arrange(desc(life_ladder))
+
+canada_hilo <- canada[-c(4:13),] |> 
+  select(Country, year)
+
+# Highest and lowest US years
+us <- us_can |>  
+  select(Country, year, life_ladder) |> 
+  filter(Country == "United States") |> 
+  arrange(desc(life_ladder))
+
+us_hilo <- us[-c(4:13),] |> 
+  select(Country, year) 
+
+```
+
+```{r, echo=FALSE}
+knitr::kable(canada_hilo, col.names = c("Country", "Year"), caption = "Highest and Lowest Happiness Years for Canada")
+knitr::kable(us_hilo, col.names = c("Country", "Year"), caption = "Highest and Lowest Happiness Years for the US")
+```
+#### ANSWER:  While similar in trend, they do not align exactly. There is only one common year between the US and Canada both for the happiest and the unhappiest years, 2013. There seems to be a lag in the Canadian happiness trend compared to US with peak and trough effects 1-3 years after the US. Overall, from 2008 to 2019, Canada was happier than the US. Canada  also had higher rates in variables such as The Freedom Life Choices as well as a lower corruption %.  Overall Canadians also have much more confidence in their government for their happy years. 
+ 
+
+2) How is happiness distributed by region? Summarize happiness by finding the average (mean), 25th percentile (quantile(x, .25)), and 75th percentile (quantile(x, .75))  by *region* for each year. 
+```{r, fig.width=10,fig.height=12, warning = FALSE, message=FALSE}
+# Load regions and rename columns for simplicity
+regions <- regions <- read.csv("Regions.csv")
+regions <- rename(regions, Country = Country.name, Region = Regional.indicator)
+
+# Joining full data frame and regions data. Left Join to keep all country info.
+df_full <- left_join(Happiness_2005_2021, regions)
+
+quartdf <- df_full  |>  
+  filter(Region != "NA") |>  
+  group_by(year, Region) |>  
+  summarize(min = min(life_ladder),
+            q1 = quantile(life_ladder, .25),
+            mean = mean(life_ladder),
+            q3 = quantile(life_ladder, .75),
+            max = max(life_ladder))
+
+quartdf |> 
+  ggplot(aes(x = year, y = mean, colour = Region))+
+  geom_smooth(cex = 1.5, se = FALSE)+
+  theme_dark()+
+  labs(title = "Mean Regional Happiness by Year", x = "Year", y = "Mean Happiness")
+
+```
+
+
+``` {r, echo=FALSE}
+knitr::kable(quartdf, digits = 2)
+
+```
+#### ANSWER:  North America and Western Europe are the happiest regions based on both the median and mean of Life Ladder.  The Sub-Sarahan African region is the most least happy. 
+ 
+ 
+
+## Team-Generated Question
+Consult with your team to formulate a question similar to those in the previous questions. Explain in words how you can use the provided data to answer that question, then write code to format the data to answer the question. 
+
+
+### Which countries had the highest increase in happiness in a given year? ###
+
+We will identify the countries that had the highest increase in Happiness in a given year.   For this analysis we will need to use the total data set of countries by year and with the "life_ladder" data point calculate the rate of change based on the year prior.   
+
+``` {r}
+
+#This will calculate the rate of change
+# It firsts groups the data by year 
+# Then it sorts it so each row is Country and Year in order
+# It then creates a 'rate' of change calculating the percentage for
+#the rows current leader rate with and using the lag command which
+#looks at the life_ladder score the row above
+# It then ungroups to see each line
+## NA will be calculated for rows that are the first year in the data
+#as there is no previous years to compare too
+
+Happiness_Change <- Happiness_2005_2021 |>  
+  group_by(Country) |> 
+  arrange(Country, year) |>  
+  mutate(rate = 100 * (life_ladder - lag(life_ladder))/lag(life_ladder)) |> 
+  ungroup()
+  
+  
+Change_summary <- Happiness_Change |> 
+  top_n(5, rate) |> 
+  select(Country, year, rate) |> 
+  arrange(desc(rate))
+
+knitr::kable(Change_summary,
+             col.names = c("Country", "Year", "Happiness % Increase"),
+             digits = 4,
+             caption = "Countries with Highest Increase in Happiness in 1 Year")
+  
+  
+
+``` 
+
+#### ANSWER:   The countries that had the highest increase in happiness are: Zambia in 2020, Sierra Leone in 2010, Botswana in 2012, Egypt in 2014, and Yemen in 2019 
+ 
+
