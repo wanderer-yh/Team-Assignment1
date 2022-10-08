@@ -154,7 +154,8 @@ We will identify the countries that had the highest increase in Happiness in a g
 Happiness_Change <- Happiness_2005_2021 |>  
   group_by(Country) |> 
   arrange(Country, year) |>  
-  mutate(rate = 100 * (life_ladder - lag(life_ladder))/lag(life_ladder)) |> 
+  #mutate(rate = 100 * (life_ladder - lag(life_ladder))/lag(life_ladder)) |> 
+  mutate(rate = 100 * (life_ladder-lag(life_ladder))/(10-lag(life_ladder))) |>
   ungroup()
   
   
