@@ -114,7 +114,14 @@ quartdf |>
   labs(title = "Mean Regional Happiness by Year", x = "Year", y = "Mean Happiness")
 
 ```
+```{r}
+devtools::install_github("hrbrmstr/streamgraph")
+library(streamgraph)
 
+pp <- streamgraph(quartdf, key="Region", value="mean", date="year", height="300px", width="1000px")
+pp 
+
+```
 
 ``` {r, echo=FALSE}
 knitr::kable(quartdf, digits = 2)
